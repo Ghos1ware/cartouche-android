@@ -61,7 +61,8 @@ import javax.microedition.khronos.opengles.GL10;
  * Moonlight underneath for everything streaming. The page talks to this activity through one
  * message channel, open to the site's origin only (a third-party page or frame never reaches
  * it): the PCs found on the network, pairing, a PC's games with their covers, starting and
- * quitting a game, the stream settings, and browser games, played in the app without a PC.
+ * quitting a game, the stream settings, browser games, played in the app without a PC, and the
+ * PC's Ma collection from Cartouche itself (CartoucheApi: sheets, play time, save points).
  *
  * Messages from the page: {"id": n, "method": "...", "args": [...]}; answers: {"id": n, "ok":
  * true, "value": ...} or {"id": n, "ok": false, "error": "..."}; events: {"event": "...",
@@ -248,6 +249,12 @@ public class CartoucheActivity extends Activity {
             case "moonlight":
                 runOnUiThread(() -> startActivity(new Intent(this, PcView.class)));
                 return JSONObject.NULL;
+            case "pcLibrary":
+                return pcLibrary(args.getString(0));
+            case "pcGame":
+                return api(args.getString(0)).json("/v1/games/" + gameId(args.getString(1)));
+            case "pcCover":
+                return pcCover(args.getString(0), gameId(args.getString(1)), args.optString(2, ""));
             default:
                 throw new IllegalArgumentException("Unknown method " + method);
         }
@@ -322,6 +329,8 @@ public class CartoucheActivity extends Activity {
                     PairState state = manager.pair(http.getServerInfo(true), pin);
                     if (state == PairState.PAIRED) {
                         binder().getComputer(uuid).serverCert = manager.getPairedCert();
+                        CartoucheApi.forget(this, uuid);
+                        apis.clear();
                         binder().invalidateStateForComputer(uuid);
                     } else {
                         error = state.name().toLowerCase();
@@ -385,6 +394,71 @@ public class CartoucheActivity extends Activity {
             return "data:" + type + ";base64," + Base64.encodeToString(image, Base64.NO_WRAP);
         } catch (IOException e) {
             return JSONObject.NULL;
+        }
+    }
+
+    // ---- Cartouche's own API on the PC (CartoucheApi): Ma collection, sheets, covers ----
+
+    private final Map<String, CartoucheApi> apis = new ConcurrentHashMap<>();
+
+    private CartoucheApi api(String uuid) throws IOException {
+        ComputerDetails details = computer(uuid);
+        String key = uuid + "@" + (details.activeAddress != null ? details.activeAddress.address : "");
+        CartoucheApi api = apis.get(key);
+        if (api == null) {
+            api = new CartoucheApi(this, PlatformBinding.getCryptoProvider(this), details);
+            apis.put(key, api);
+        }
+        return api;
+    }
+
+    private static String gameId(String id) {
+        if (!id.matches("[a-z0-9-]+")) {
+            throw new IllegalArgumentException("Not a game id: " + id);
+        }
+        return id;
+    }
+
+    /** The PC's Ma collection, or null when no Cartouche answers there (the page shows Moonlight's list). */
+    private Object pcLibrary(String uuid) throws Exception {
+        try {
+            CartoucheApi api = api(uuid);
+            JSONObject library = api.json("/v1/hello");
+            library.put("games", api.json("/v1/games").getJSONArray("games"));
+            return library;
+        } catch (CartoucheApi.Unavailable e) {
+            return JSONObject.NULL;
+        }
+    }
+
+    /** A game's cover from the PC, kept on disk under its fingerprint (a new cover, a new file). */
+    private String pcCover(String uuid, String gameId, String fingerprint) throws IOException {
+        File dir = new File(getCacheDir(), "pc-covers");
+        File file = new File(dir, uuid + "-" + gameId + "-" + fingerprint.replaceAll("[^a-z0-9]", "") + ".png");
+        byte[] image;
+        if (file.exists()) {
+            image = readAll(file);
+        } else {
+            image = api(uuid).bytes("/v1/games/" + gameId + "/cover");
+            dir.mkdirs();
+            try (FileOutputStream out = new FileOutputStream(file)) {
+                out.write(image);
+            } catch (IOException ignored) {
+                // Drawn again next time.
+            }
+        }
+        return "data:image/png;base64," + Base64.encodeToString(image, Base64.NO_WRAP);
+    }
+
+    private static byte[] readAll(File file) throws IOException {
+        try (InputStream in = new java.io.FileInputStream(file)) {
+            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+            byte[] buffer = new byte[16384];
+            int read;
+            while ((read = in.read(buffer)) != -1) {
+                bytes.write(buffer, 0, read);
+            }
+            return bytes.toByteArray();
         }
     }
 
