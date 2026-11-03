@@ -289,4 +289,12 @@
     <string name="cartouche_connecting_step_pc">Connexion à %1$s…</string>
     <string name="cartouche_connecting_step_picture">Préparation de l\'image sur %1$s…</string>
     <string name="cartouche_connecting_step_game">Lancement de %1$s…</string>
+    <string name="cartouche_stats_title">STATS</string>
+    <string name="cartouche_stats_fps">i/s</string>
+    <string name="cartouche_stats_network">Réseau</string>
+    <string name="cartouche_stats_decode">Décodage</string>
+    <string name="cartouche_stats_host">PC</string>
+    <string name="cartouche_stats_loss">Pertes</string>
+    <string name="cartouche_stats_close">Fermer les stats</string>
+    <string name="cartouche_stats_open">Afficher les stats</string>
 </resources>

@@ -308,4 +308,12 @@
     <string name="cartouche_connecting_step_pc">Connecting to %1$s…</string>
     <string name="cartouche_connecting_step_picture">Getting the picture ready on %1$s…</string>
     <string name="cartouche_connecting_step_game">Starting %1$s…</string>
+    <string name="cartouche_stats_title">STATS</string>
+    <string name="cartouche_stats_fps">fps</string>
+    <string name="cartouche_stats_network">Network</string>
+    <string name="cartouche_stats_decode">Decoding</string>
+    <string name="cartouche_stats_host">PC</string>
+    <string name="cartouche_stats_loss">Lost</string>
+    <string name="cartouche_stats_close">Close the stats</string>
+    <string name="cartouche_stats_open">Show the stats</string>
 </resources>

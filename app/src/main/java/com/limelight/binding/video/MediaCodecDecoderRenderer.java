@@ -1408,6 +1408,22 @@ public class MediaCodecDecoderRenderer extends VideoDecoderRenderer implements C
                 }
                 sb.append(context.getString(R.string.perf_overlay_dectime, decodeTimeMs));
                 perfListener.onPerfUpdate(sb.toString());
+
+                PerfStats stats = new PerfStats();
+                stats.width = initialWidth;
+                stats.height = initialHeight;
+                stats.totalFps = fps.totalFps;
+                stats.receivedFps = fps.receivedFps;
+                stats.renderedFps = fps.renderedFps;
+                stats.decoder = decoder;
+                stats.lossPercent = lastTwo.totalFrames > 0 ? (float)lastTwo.framesLost / lastTwo.totalFrames * 100 : 0;
+                stats.rttMs = (int)(rttInfo >> 32);
+                stats.rttVarianceMs = (int)rttInfo;
+                if (lastTwo.framesWithHostProcessingLatency > 0) {
+                    stats.hostLatencyMs = (float)lastTwo.totalHostProcessingLatency / 10 / lastTwo.framesWithHostProcessingLatency;
+                }
+                stats.decodeMs = decodeTimeMs;
+                perfListener.onPerfStats(stats);
             }
 
             globalVideoStats.add(activeWindowVideoStats);

@@ -36,6 +36,8 @@ import com.limelight.utils.ServerHelper;
 import com.limelight.utils.ShortcutHelper;
 import com.limelight.utils.SpinnerDialog;
 import com.limelight.ui.ConnectingScreen;
+import com.limelight.ui.StatsPanel;
+import com.limelight.binding.video.PerfStats;
 import com.limelight.utils.UiHelper;
 
 import android.annotation.SuppressLint;
@@ -120,6 +122,9 @@ public class Game extends Activity implements SurfaceHolder.Callback,
     private NvConnection conn;
     // Cartouche's connection screen, in place of Moonlight's spinner dialog (same calls).
     private ConnectingScreen spinner;
+    // Cartouche's stats panel, in place of Moonlight's text (the stats setting on).
+    private StatsPanel statsPanel;
+    private boolean statsOnTop;
     private boolean displayedFailureDialog = false;
     private boolean connecting = false;
     private boolean connected = false;
@@ -377,7 +382,7 @@ public class Game extends Activity implements SurfaceHolder.Callback,
 
         // Check if the user has enabled performance stats overlay
         if (prefConfig.enablePerfOverlay) {
-            performanceOverlayView.setVisibility(View.VISIBLE);
+            statsPanel = new StatsPanel(this, (android.widget.FrameLayout) performanceOverlayView.getParent());
         }
 
         decoderRenderer = new MediaCodecDecoderRenderer(
@@ -609,6 +614,9 @@ public class Game extends Activity implements SurfaceHolder.Callback,
                 }
 
                 performanceOverlayView.setVisibility(View.GONE);
+                if (statsPanel != null) {
+                    statsPanel.setShown(false);
+                }
                 notificationOverlayView.setVisibility(View.GONE);
 
                 // Disable sensors while in PiP mode
@@ -626,8 +634,8 @@ public class Game extends Activity implements SurfaceHolder.Callback,
                     virtualController.show();
                 }
 
-                if (prefConfig.enablePerfOverlay) {
-                    performanceOverlayView.setVisibility(View.VISIBLE);
+                if (statsPanel != null) {
+                    statsPanel.setShown(true);
                 }
 
                 notificationOverlayView.setVisibility(requestedNotificationOverlayVisibility);
@@ -2687,6 +2695,19 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         else if ((visibility & View.SYSTEM_UI_FLAG_HIDE_NAVIGATION) == 0) {
             hideSystemUi(2000);
         }
+    }
+
+    @Override
+    public void onPerfStats(final PerfStats stats) {
+        if (statsPanel == null) {
+            return;
+        }
+        if (!statsOnTop) {
+            // Over the on-screen controller, added after the panel.
+            statsOnTop = true;
+            runOnUiThread(statsPanel::bringToFront);
+        }
+        statsPanel.update(stats);
     }
 
     @Override
