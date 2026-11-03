@@ -70,7 +70,7 @@ import javax.microedition.khronos.opengles.GL10;
  * "data": ...}.
  */
 public class CartoucheActivity extends Activity {
-    static final String ORIGIN = "https://cartouche.borderline.games";
+    static final String ORIGIN = "https://cartouche.gg";
     static final String HOME = ORIGIN + "/?shell=android";
 
     private WebView web;
