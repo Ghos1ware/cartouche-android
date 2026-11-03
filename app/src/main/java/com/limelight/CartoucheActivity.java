@@ -12,6 +12,9 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.util.Base64;
+import android.view.View;
+import android.view.WindowInsets;
+import android.widget.FrameLayout;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
@@ -132,6 +135,10 @@ public class CartoucheActivity extends Activity {
 
         web = new WebView(this);
         web.setBackgroundColor(0xFF07060D);
+        // A phone's page: no native scrollbars, no overscroll glow.
+        web.setVerticalScrollBarEnabled(false);
+        web.setHorizontalScrollBarEnabled(false);
+        web.setOverScrollMode(View.OVER_SCROLL_NEVER);
         WebSettings settings = web.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
@@ -162,7 +169,30 @@ public class CartoucheActivity extends Activity {
                         handle(message.getData());
                     });
         }
-        setContentView(web);
+        // Android 15 draws apps under the status and navigation bars: the page sits inside them,
+        // the bars over Cartouche's dark background, their icons light.
+        FrameLayout frame = new FrameLayout(this);
+        frame.setBackgroundColor(0xFF07060D);
+        frame.addView(web, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        frame.setOnApplyWindowInsetsListener((view, insets) -> {
+            int left, top, right, bottom;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                android.graphics.Insets bars = insets.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
+                left = bars.left;
+                top = bars.top;
+                right = bars.right;
+                bottom = bars.bottom;
+            } else {
+                left = insets.getSystemWindowInsetLeft();
+                top = insets.getSystemWindowInsetTop();
+                right = insets.getSystemWindowInsetRight();
+                bottom = insets.getSystemWindowInsetBottom();
+            }
+            view.setPadding(left, top, right, bottom);
+            return insets;
+        });
+        getWindow().getDecorView().setBackgroundColor(0xFF07060D);
+        setContentView(frame);
         web.loadUrl(HOME);
     }
 
@@ -472,7 +502,7 @@ public class CartoucheActivity extends Activity {
     public void onBackPressed() {
         // Cartouche's "back" is Escape, as on the PC; the page closes what is open.
         if (web != null) {
-            web.evaluateJavascript("window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))", null);
+            web.evaluateJavascript("window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'AndroidBack', bubbles: true }))", null);
         } else {
             super.onBackPressed();
         }
