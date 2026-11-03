@@ -35,6 +35,7 @@ import com.limelight.utils.Dialog;
 import com.limelight.utils.ServerHelper;
 import com.limelight.utils.ShortcutHelper;
 import com.limelight.utils.SpinnerDialog;
+import com.limelight.ui.ConnectingScreen;
 import com.limelight.utils.UiHelper;
 
 import android.annotation.SuppressLint;
@@ -117,7 +118,8 @@ public class Game extends Activity implements SurfaceHolder.Callback,
     private SharedPreferences tombstonePrefs;
 
     private NvConnection conn;
-    private SpinnerDialog spinner;
+    // Cartouche's connection screen, in place of Moonlight's spinner dialog (same calls).
+    private ConnectingScreen spinner;
     private boolean displayedFailureDialog = false;
     private boolean connecting = false;
     private boolean connected = false;
@@ -212,8 +214,9 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         setContentView(R.layout.activity_game);
 
         // Start the spinner
-        spinner = SpinnerDialog.displayDialog(this, getResources().getString(R.string.conn_establishing_title),
-                getResources().getString(R.string.conn_establishing_msg), true);
+        spinner = ConnectingScreen.show(this, getIntent().getStringExtra(EXTRA_APP_NAME), getIntent().getStringExtra(EXTRA_PC_NAME),
+                ConnectingScreen.coverFile(getCacheDir(), getIntent().getStringExtra(EXTRA_PC_UUID),
+                        getIntent().getIntExtra(EXTRA_APP_ID, StreamConfiguration.INVALID_APP_ID)));
 
         // Read the stream preferences
         prefConfig = PreferenceConfiguration.readPreferences(this);

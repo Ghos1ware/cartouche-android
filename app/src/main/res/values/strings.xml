@@ -303,4 +303,9 @@
     <string name="analogscroll_none">None (both sticks move the mouse)</string>
     <string name="analogscroll_right">Right analog stick</string>
     <string name="analogscroll_left">Left analog stick</string>
+    <!-- Cartouche's connection screen (ui/ConnectingScreen.java) -->
+    <string name="cartouche_connecting_from">from %1$s</string>
+    <string name="cartouche_connecting_step_pc">Connecting to %1$s…</string>
+    <string name="cartouche_connecting_step_picture">Getting the picture ready on %1$s…</string>
+    <string name="cartouche_connecting_step_game">Starting %1$s…</string>
 </resources>

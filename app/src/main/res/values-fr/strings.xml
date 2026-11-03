@@ -284,4 +284,9 @@
     <string name="title_seekbar_vibrate_fallback_strength">Ajuster l\'intensité de la vibration émulée</string>
     <string name="summary_seekbar_vibrate_fallback_strength">Amplifie ou réduit l\'intensité de la vibration sur votre appareil</string>
     <string name="suffix_seekbar_vibrate_fallback_strength">%</string>
+    <!-- L'écran de connexion de Cartouche (ui/ConnectingScreen.java) -->
+    <string name="cartouche_connecting_from">depuis %1$s</string>
+    <string name="cartouche_connecting_step_pc">Connexion à %1$s…</string>
+    <string name="cartouche_connecting_step_picture">Préparation de l\'image sur %1$s…</string>
+    <string name="cartouche_connecting_step_game">Lancement de %1$s…</string>
 </resources>

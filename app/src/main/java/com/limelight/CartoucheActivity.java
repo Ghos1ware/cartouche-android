@@ -31,6 +31,7 @@ import com.limelight.nvstream.http.PairingManager;
 import com.limelight.nvstream.http.PairingManager.PairState;
 import com.limelight.preferences.GlPreferences;
 import com.limelight.preferences.StreamSettings;
+import com.limelight.ui.ConnectingScreen;
 import com.limelight.utils.ServerHelper;
 
 import org.json.JSONArray;
@@ -38,6 +39,8 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Collections;
@@ -321,13 +324,14 @@ public class CartoucheActivity extends Activity {
             json.put("id", app.getAppId());
             json.put("name", app.getAppName());
             json.put("hdr", app.isHdrSupported());
-            json.put("cover", cover(http, app));
+            json.put("cover", cover(http, app, ConnectingScreen.coverFile(getCacheDir(), uuid, app.getAppId())));
             apps.put(json);
         }
         return apps;
     }
 
-    private static Object cover(NvHTTP http, NvApp app) {
+    /** The cover as a data URL for the page, kept on disk for the connection screen too. */
+    private static Object cover(NvHTTP http, NvApp app, File keep) {
         try (InputStream in = http.getBoxArt(app)) {
             if (in == null) {
                 return JSONObject.NULL;
@@ -339,6 +343,14 @@ public class CartoucheActivity extends Activity {
                 bytes.write(buffer, 0, read);
             }
             byte[] image = bytes.toByteArray();
+            try {
+                keep.getParentFile().mkdirs();
+                try (FileOutputStream out = new FileOutputStream(keep)) {
+                    out.write(image);
+                }
+            } catch (IOException ignored) {
+                // The connection screen shows the cartridge instead.
+            }
             String type = image.length > 3 && (image[0] & 0xFF) == 0xFF && (image[1] & 0xFF) == 0xD8 ? "image/jpeg" : "image/png";
             return "data:" + type + ";base64," + Base64.encodeToString(image, Base64.NO_WRAP);
         } catch (IOException e) {
