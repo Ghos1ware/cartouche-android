@@ -1,0 +1,77 @@
+---
+# Cartouche for Android: builds the APK on GitHub-hosted runners (this repository's own CI;
+# upstream's appveyor.yml is Moonlight's). Signed with Cartouche's release key when the
+# ANDROID_KEYSTORE_BASE64 and ANDROID_KEYSTORE_PASSWORD secrets are set, so that each new
+# APK installs over the previous one; unsigned (a build check only) without them.
+name: Cartouche for Android
+permissions: {}
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+concurrency:
+  group: cartouche-android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    name: APK
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Android SDK packages
+        run: |
+          set -euo pipefail
+          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$sdkmanager" --licenses > /dev/null || true
+          ndk="$(sed -n 's/^ *ndkVersion "\(.*\)"/\1/p' app/build.gradle)"
+          sdk="$(sed -n 's/^ *compileSdk \([0-9]*\)/\1/p' app/build.gradle)"
+          "$sdkmanager" "ndk;${ndk}" "platforms;android-${sdk}" > /dev/null
+
+      - name: Signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "${KEYSTORE_BASE64}" ]; then
+            echo "::warning::No ANDROID_KEYSTORE_BASE64 secret: this APK is unsigned (it only checks the build)."
+            exit 0
+          fi
+          echo "${KEYSTORE_BASE64}" | base64 -d > "${RUNNER_TEMP}/cartouche.p12"
+          echo "CARTOUCHE_KEYSTORE=${RUNNER_TEMP}/cartouche.p12" >> "${GITHUB_ENV}"
+
+      - name: Build
+        env:
+          CARTOUCHE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: ./gradlew --no-daemon assembleNonRootRelease
+
+      - name: Name the APK
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^ *versionName "\(.*\)"/\1/p' app/build.gradle)"
+          signed="$([ -n "${CARTOUCHE_KEYSTORE:-}" ] && echo "" || echo "-unsigned")"
+          mkdir -p apk
+          cp app/build/outputs/apk/nonRoot/release/*.apk "apk/Cartouche-${version}${signed}.apk"
+          ls -la apk
+
+      - name: Upload the APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: cartouche-android
+          path: apk/*.apk
+          if-no-files-found: error
+          retention-days: 30
