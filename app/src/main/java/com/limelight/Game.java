@@ -129,6 +129,10 @@ public class Game extends Activity implements SurfaceHolder.Callback,
     private int suppressPipRefCount = 0;
     private String pcName;
     private String appName;
+    // Cartouche: back ends the game on the PC too (its "undo", Cartouche.exe --stop, closes it);
+    // a stream that ends otherwise (the network, the app put away) leaves it to resume.
+    private boolean quitOnStop;
+    private NvHTTP quitHttp;
     private NvApp app;
     private float desiredRefreshRate;
 
@@ -491,6 +495,12 @@ public class Game extends Activity implements SurfaceHolder.Callback,
                 PlatformBinding.getCryptoProvider(this), serverCert);
         controllerHandler = new ControllerHandler(this, conn, this, prefConfig);
         keyboardTranslator = new KeyboardTranslator();
+        try {
+            quitHttp = new NvHTTP(new ComputerDetails.AddressTuple(host, port), httpsPort, uniqueId, serverCert,
+                    PlatformBinding.getCryptoProvider(this));
+        } catch (Exception e) {
+            quitHttp = null;
+        }
 
         InputManager inputManager = (InputManager) getSystemService(Context.INPUT_SERVICE);
         inputManager.registerInputDeviceListener(keyboardTranslator, null);
@@ -2247,9 +2257,24 @@ public class Game extends Activity implements SurfaceHolder.Callback,
             new Thread() {
                 public void run() {
                     conn.stop();
+                    if (quitOnStop && quitHttp != null) {
+                        try {
+                            quitHttp.quitApp();
+                        } catch (Exception e) {
+                            LimeLog.warning("Quitting the game on the PC failed: " + e);
+                        }
+                    }
                 }
             }.start();
         }
+    }
+
+    @Override
+    @SuppressWarnings("deprecation")
+    public void onBackPressed() {
+        // Cartouche: back means done playing, so the game closes on the PC as well.
+        quitOnStop = true;
+        super.onBackPressed();
     }
 
     @Override
