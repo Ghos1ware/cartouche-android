@@ -30,6 +30,10 @@ import java.util.Locale;
  * then the network, the phone's decoding, the PC's own time and the frames lost, each with a dot
  * that says whether it is fine. It closes to a small round button in its corner, which opens it
  * again; both move under the finger, and the corner they sit in and whether it is open are kept.
+ *
+ * They move by their layout margins, never by translation: the stream is a SurfaceView, and the
+ * window keeps visible over it only the views' laid-out bounds; a translated view is cut where it
+ * leaves them, or vanishes.
  */
 public class StatsPanel {
     private static final int GLASS = 0xE007060D;
@@ -160,12 +164,16 @@ public class StatsPanel {
         card.setOnTouchListener(drag(card, null));
         pill.setOnTouchListener(drag(pill, () -> setOpen(true)));
 
-        parent.addView(card, new FrameLayout.LayoutParams(dp(224), ViewGroup.LayoutParams.WRAP_CONTENT));
-        parent.addView(pill, new FrameLayout.LayoutParams(dp(40), dp(40)));
+        parent.addView(card, new FrameLayout.LayoutParams(dp(224), ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP | Gravity.LEFT));
+        parent.addView(pill, new FrameLayout.LayoutParams(dp(40), dp(40), Gravity.TOP | Gravity.LEFT));
         card.setVisibility(View.INVISIBLE);
         pill.setVisibility(View.INVISIBLE);
         // Placed once their sizes are known, and again when the screen turns.
-        parent.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> place());
+        parent.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
+            if (r - l != or - ol || b - t != ob - ot) {
+                place();
+            }
+        });
         card.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
             if (r - l != or - ol || b - t != ob - ot) {
                 place();
@@ -250,8 +258,7 @@ public class StatsPanel {
         // The corner nearest the anchor's side: a panel on the right grows to the left.
         float x = anchorX < 0.5f ? px : px - w;
         float y = anchorY < 0.5f ? py : py - h;
-        view.setX(clamp(x, dp(10), width - w - dp(10)));
-        view.setY(clamp(y, dp(10), height - h - dp(10)));
+        move(view, clamp(x, dp(10), width - w - dp(10)), clamp(y, dp(10), height - h - dp(10)));
     }
 
     /** After a drag: the corner of the view nearest its side of the screen becomes the anchor. */
@@ -261,10 +268,12 @@ public class StatsPanel {
         if (width == 0 || height == 0) {
             return;
         }
-        float centerX = view.getX() + view.getWidth() / 2f;
-        float centerY = view.getY() + view.getHeight() / 2f;
-        float px = centerX < width / 2f ? view.getX() : view.getX() + view.getWidth();
-        float py = centerY < height / 2f ? view.getY() : view.getY() + view.getHeight();
+        float left = left(view);
+        float top = top(view);
+        float centerX = left + view.getWidth() / 2f;
+        float centerY = top + view.getHeight() / 2f;
+        float px = centerX < width / 2f ? left : left + view.getWidth();
+        float py = centerY < height / 2f ? top : top + view.getHeight();
         anchorX = clamp(px / width, 0f, 1f);
         anchorY = clamp(py / height, 0f, 1f);
         // Exactly on the middle would flip sides: keep it a hair to the side it came from.
@@ -286,10 +295,11 @@ public class StatsPanel {
                     case MotionEvent.ACTION_DOWN:
                         downX = event.getRawX();
                         downY = event.getRawY();
-                        startX = view.getX();
-                        startY = view.getY();
+                        startX = left(view);
+                        startY = top(view);
                         moved = false;
-                        view.animate().scaleX(1.04f).scaleY(1.04f).setDuration(120).start();
+                        // No growing under the finger: drawn out of its bounds, it would be cut.
+                        view.animate().alpha(0.7f).setDuration(120).start();
                         return true;
                     case MotionEvent.ACTION_MOVE:
                         float dx = event.getRawX() - downX;
@@ -298,13 +308,12 @@ public class StatsPanel {
                             moved = true;
                         }
                         if (moved) {
-                            view.setX(clamp(startX + dx, 0, parent.getWidth() - view.getWidth()));
-                            view.setY(clamp(startY + dy, 0, parent.getHeight() - view.getHeight()));
+                            move(view, clamp(startX + dx, 0, parent.getWidth() - view.getWidth()), clamp(startY + dy, 0, parent.getHeight() - view.getHeight()));
                         }
                         return true;
                     case MotionEvent.ACTION_UP:
                     case MotionEvent.ACTION_CANCEL:
-                        view.animate().scaleX(1f).scaleY(1f).setDuration(120).start();
+                        view.animate().alpha(view == pill ? 0.85f : 1f).setDuration(120).start();
                         if (moved) {
                             keep(view);
                         } else if (tap != null && event.getActionMasked() == MotionEvent.ACTION_UP) {
@@ -316,6 +325,25 @@ public class StatsPanel {
                 }
             }
         };
+    }
+
+    private static void move(View view, float x, float y) {
+        FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) view.getLayoutParams();
+        int left = Math.round(x);
+        int top = Math.round(y);
+        if (params.leftMargin != left || params.topMargin != top) {
+            params.leftMargin = left;
+            params.topMargin = top;
+            view.setLayoutParams(params);
+        }
+    }
+
+    private static int left(View view) {
+        return ((FrameLayout.LayoutParams) view.getLayoutParams()).leftMargin;
+    }
+
+    private static int top(View view) {
+        return ((FrameLayout.LayoutParams) view.getLayoutParams()).topMargin;
     }
 
     // ---- Pieces ----
