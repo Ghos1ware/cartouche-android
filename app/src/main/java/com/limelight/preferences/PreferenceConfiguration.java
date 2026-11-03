@@ -342,6 +342,7 @@ public class PreferenceConfiguration {
 
     public static int getDefaultBitrate(Context context) {
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+        useNativeResolution(context, prefs);
         return getDefaultBitrate(
                 prefs.getString(RESOLUTION_PREF_STRING, DEFAULT_RESOLUTION),
                 prefs.getString(FPS_PREF_STRING, DEFAULT_FPS));
@@ -444,8 +445,39 @@ public class PreferenceConfiguration {
                 Build.FINGERPRINT.contains("PPR1.180610.011/4079208_2235.1395");
     }
 
+    // Cartouche: the stream takes the phone's whole screen. The server makes a virtual display of
+    // the size asked, so the phone's own resolution fills it, where 1280x720 (16:9) left bars on
+    // a longer screen. Once, over Moonlight's default (also what its settings screen saved).
+    private static final String CARTOUCHE_NATIVE_PREF_STRING = "cartouche_native_resolution";
+
+    private static void useNativeResolution(Context context, SharedPreferences prefs) {
+        if (prefs.getBoolean(CARTOUCHE_NATIVE_PREF_STRING, false)) {
+            return;
+        }
+        SharedPreferences.Editor editor = prefs.edit().putBoolean(CARTOUCHE_NATIVE_PREF_STRING, true);
+        String saved = prefs.getString(RESOLUTION_PREF_STRING, null);
+        android.view.WindowManager windows = (android.view.WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
+        if ((saved == null || DEFAULT_RESOLUTION.equals(saved)) && windows != null) {
+            android.graphics.Point size = new android.graphics.Point();
+            windows.getDefaultDisplay().getRealSize(size);
+            // Landscape, even sizes (the encoder wants them).
+            int width = Math.max(size.x, size.y) & ~1;
+            int height = Math.min(size.x, size.y) & ~1;
+            if (width > 0 && height > 0) {
+                editor.putString(RESOLUTION_PREF_STRING, width + "x" + height);
+                // A bitrate saved for 1280x720 by the settings screen: computed again for this size.
+                String fps = prefs.getString(FPS_PREF_STRING, DEFAULT_FPS);
+                if (prefs.getInt(BITRATE_PREF_STRING, -1) == getDefaultBitrate(DEFAULT_RESOLUTION, fps)) {
+                    editor.remove(BITRATE_PREF_STRING);
+                }
+            }
+        }
+        editor.apply();
+    }
+
     public static PreferenceConfiguration readPreferences(Context context) {
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+        useNativeResolution(context, prefs);
         PreferenceConfiguration config = new PreferenceConfiguration();
 
         // Migrate legacy preferences to the new locations
