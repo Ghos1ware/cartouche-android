@@ -103,6 +103,14 @@
             </intent-filter>
         </activity>
 
+        <!-- A browser game, full screen, without a PC. Rotating keeps the game running. -->
+        <activity
+            android:name=".WebGameActivity"
+            android:exported="false"
+            android:resizeableActivity="true"
+            android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen"
+            android:configChanges="mcc|mnc|touchscreen|keyboard|keyboardHidden|navigation|screenLayout|fontScale|uiMode|orientation|screenSize|smallestScreenSize|layoutDirection" />
+
         <!-- Moonlight's own screen, reached from Cartouche's settings. -->
         <activity
             android:name=".PcView"

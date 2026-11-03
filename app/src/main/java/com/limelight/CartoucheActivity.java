@@ -55,7 +55,7 @@ import javax.microedition.khronos.opengles.GL10;
  * Moonlight underneath for everything streaming. The page talks to this activity through one
  * message channel, open to the site's origin only (a third-party page or frame never reaches
  * it): the PCs found on the network, pairing, a PC's games with their covers, starting and
- * quitting a game, the stream settings.
+ * quitting a game, the stream settings, and browser games, played in the app without a PC.
  *
  * Messages from the page: {"id": n, "method": "...", "args": [...]}; answers: {"id": n, "ok":
  * true, "value": ...} or {"id": n, "ok": false, "error": "..."}; events: {"event": "...",
@@ -203,6 +203,9 @@ public class CartoucheActivity extends Activity {
                 return apps(args.getString(0));
             case "play":
                 play(args.getString(0), args.getInt(1), args.getString(2), args.optBoolean(3, false));
+                return JSONObject.NULL;
+            case "playWeb":
+                playWeb(args.getString(0), args.optString(1, ""));
                 return JSONObject.NULL;
             case "quit":
                 return connection(computer(args.getString(0))).quitApp();
@@ -352,6 +355,18 @@ public class CartoucheActivity extends Activity {
         intent.putExtra(Game.EXTRA_APP_ID, String.valueOf(appId));
         intent.putExtra(Game.EXTRA_APP_NAME, appName);
         intent.putExtra(Game.EXTRA_APP_HDR, hdr);
+        runOnUiThread(() -> startActivity(intent));
+    }
+
+    /** A browser game, full screen in the app: no PC needed. */
+    private void playWeb(String url, String title) {
+        Uri target = Uri.parse(url);
+        if (!"https".equals(target.getScheme()) && !"http".equals(target.getScheme())) {
+            throw new IllegalArgumentException("Not a web game: " + url);
+        }
+        Intent intent = new Intent(this, WebGameActivity.class);
+        intent.putExtra(WebGameActivity.EXTRA_URL, url);
+        intent.putExtra(WebGameActivity.EXTRA_TITLE, title);
         runOnUiThread(() -> startActivity(intent));
     }
 
