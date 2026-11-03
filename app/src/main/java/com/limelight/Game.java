@@ -2032,14 +2032,15 @@ public class Game extends Activity implements SurfaceHolder.Callback,
                     return true;
                 }
 
-                // TODO: Re-enable native touch when have a better solution for handling
-                // cancelled touches from Android gestures and 3 finger taps to activate
-                // the software keyboard.
-                /*if (!prefConfig.touchscreenTrackpad && trySendTouchEvent(view, event)) {
+                // Cartouche: native touch, as Cartouche's games are played with the fingers
+                // (several at once: a wheel and pedals). Upstream keeps it off for Android's
+                // cancelled gestures, which go as LI_TOUCH_EVENT_CANCEL_ALL here, and the 3 finger
+                // tap, handled above. A host without touch events falls back to the mouse below.
+                if (!prefConfig.touchscreenTrackpad && trySendTouchEvent(view, event)) {
                     // If this host supports touch events and absolute touch is enabled,
                     // send it directly as a touch event.
                     return true;
-                }*/
+                }
 
                 TouchContext context = getTouchContext(actionIndex);
                 if (context == null) {
