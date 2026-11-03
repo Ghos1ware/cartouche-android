@@ -39,9 +39,9 @@ jobs:
           set -euo pipefail
           sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           yes | "$sdkmanager" --licenses > /dev/null || true
+          # The NDK the build names; Gradle downloads the platform and build tools itself.
           ndk="$(sed -n 's/^ *ndkVersion "\(.*\)"/\1/p' app/build.gradle)"
-          sdk="$(sed -n 's/^ *compileSdk \([0-9]*\)/\1/p' app/build.gradle)"
-          "$sdkmanager" "ndk;${ndk}" "platforms;android-${sdk}" > /dev/null
+          "$sdkmanager" "ndk;${ndk}" > /dev/null
 
       - name: Signing key
         env:
