@@ -32,6 +32,7 @@ import com.limelight.nvstream.http.NvApp;
 import com.limelight.nvstream.http.NvHTTP;
 import com.limelight.nvstream.http.PairingManager;
 import com.limelight.nvstream.http.PairingManager.PairState;
+import com.limelight.preferences.CartoucheStreamSettings;
 import com.limelight.preferences.GlPreferences;
 import com.limelight.preferences.StreamSettings;
 import com.limelight.ui.ConnectingScreen;
@@ -243,6 +244,10 @@ public class CartoucheActivity extends Activity {
                 return JSONObject.NULL;
             case "quit":
                 return connection(computer(args.getString(0))).quitApp();
+            case "streamSettings":
+                return CartoucheStreamSettings.read(this);
+            case "setStreamSetting":
+                return CartoucheStreamSettings.set(this, args.getString(0), args.getString(1));
             case "settings":
                 runOnUiThread(() -> startActivity(new Intent(this, StreamSettings.class)));
                 return JSONObject.NULL;
