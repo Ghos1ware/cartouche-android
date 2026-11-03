@@ -244,6 +244,9 @@ public class CartoucheActivity extends Activity {
                 return JSONObject.NULL;
             case "quit":
                 return connection(computer(args.getString(0))).quitApp();
+            case "openBrowser":
+                openBrowser(args.getString(0));
+                return JSONObject.NULL;
             case "streamSettings":
                 return CartoucheStreamSettings.read(this);
             case "setStreamSetting":
@@ -477,6 +480,19 @@ public class CartoucheActivity extends Activity {
         intent.putExtra(Game.EXTRA_APP_NAME, appName);
         intent.putExtra(Game.EXTRA_APP_HDR, hdr);
         runOnUiThread(() -> startActivity(intent));
+    }
+
+    /** A page of the site in the phone's browser (signing in: Steam and Google refuse a WebView). Ours only. */
+    private void openBrowser(String url) {
+        if (!url.startsWith(ORIGIN + "/")) {
+            throw new IllegalArgumentException("Not a page of Cartouche: " + url);
+        }
+        runOnUiThread(() -> {
+            try {
+                startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
+            } catch (ActivityNotFoundException ignored) {
+            }
+        });
     }
 
     /** A browser game, full screen in the app: no PC needed. */
