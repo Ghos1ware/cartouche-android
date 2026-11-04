@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The violet tile of the Cartouche icon: a glow from the top fading to deep indigo. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <gradient
+        android:type="radial"
+        android:centerX="0.5"
+        android:centerY="0.3"
+        android:gradientRadius="80%p"
+        android:startColor="#6A2BF0"
+        android:centerColor="#4210C0"
+        android:endColor="#25067A" />
+</shape>
