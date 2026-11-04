@@ -316,4 +316,9 @@
     <string name="cartouche_stats_loss">Lost</string>
     <string name="cartouche_stats_close">Close the stats</string>
     <string name="cartouche_stats_open">Show the stats</string>
+    <string name="cartouche_loading_retry">Try again</string>
+    <string name="cartouche_loading_error_title">Cartouche can\'t be reached</string>
+    <string name="cartouche_loading_error">Check your connection: cartouche.gg did not answer. Your games on the PC are still there.</string>
+    <string name="cartouche_loading_slow_title">It\'s taking a while…</string>
+    <string name="cartouche_loading_slow">cartouche.gg is slow to answer. Wait a little, or try again.</string>
 </resources>

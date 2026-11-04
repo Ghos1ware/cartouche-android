@@ -6,16 +6,21 @@ import android.content.ActivityNotFoundException;
 import android.content.ComponentName;
 import android.content.Intent;
 import android.content.ServiceConnection;
+import android.graphics.Bitmap;
 import android.net.Uri;
 import android.opengl.GLSurfaceView;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
 import android.util.Base64;
 import android.view.View;
 import android.view.WindowInsets;
 import android.widget.FrameLayout;
+import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -36,6 +41,7 @@ import com.limelight.preferences.CartoucheStreamSettings;
 import com.limelight.preferences.GlPreferences;
 import com.limelight.preferences.StreamSettings;
 import com.limelight.ui.ConnectingScreen;
+import com.limelight.ui.LoadingScreen;
 import com.limelight.utils.ServerHelper;
 
 import org.json.JSONArray;
@@ -74,6 +80,11 @@ public class CartoucheActivity extends Activity {
     static final String HOME = ORIGIN + "/?shell=android";
 
     private WebView web;
+    // Shown until the page is there; says so when the site does not answer (12 s: slow).
+    private LoadingScreen loading;
+    private boolean pageFailed;
+    private final Handler clock = new Handler(Looper.getMainLooper());
+    private final Runnable slow = () -> loading.failed(true);
     private JavaScriptReplyProxy page;
     private ComputerManagerService.ComputerManagerBinder managerBinder;
     private boolean polling;
@@ -160,6 +171,36 @@ public class CartoucheActivity extends Activity {
                 }
                 return true;
             }
+
+            @Override
+            public void onPageStarted(WebView view, String url, Bitmap favicon) {
+                pageFailed = false;
+                loading.loading();
+                clock.removeCallbacks(slow);
+                clock.postDelayed(slow, 12_000);
+            }
+
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                clock.removeCallbacks(slow);
+                if (!pageFailed) {
+                    loading.done();
+                }
+            }
+
+            @Override
+            public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+                if (request.isForMainFrame()) {
+                    fail();
+                }
+            }
+
+            @Override
+            public void onReceivedHttpError(WebView view, WebResourceRequest request, WebResourceResponse response) {
+                if (request.isForMainFrame() && response.getStatusCode() >= 500) {
+                    fail();
+                }
+            }
         });
         if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
             WebViewCompat.addWebMessageListener(web, "CartoucheAndroid", Collections.singleton(ORIGIN),
@@ -176,6 +217,12 @@ public class CartoucheActivity extends Activity {
         FrameLayout frame = new FrameLayout(this);
         frame.setBackgroundColor(0xFF07060D);
         frame.addView(web, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        loading = new LoadingScreen(this, () -> {
+            loading.loading();
+            web.loadUrl(HOME);
+        });
+        frame.addView(loading.view(), new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        loading.loading();
         frame.setOnApplyWindowInsetsListener((view, insets) -> {
             int left, top, right, bottom;
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -196,6 +243,13 @@ public class CartoucheActivity extends Activity {
         getWindow().getDecorView().setBackgroundColor(0xFF07060D);
         setContentView(frame);
         web.loadUrl(HOME);
+    }
+
+    /** The site did not answer: the page behind is the WebView's error, never shown. */
+    private void fail() {
+        pageFailed = true;
+        clock.removeCallbacks(slow);
+        loading.failed(false);
     }
 
     // ---- The page's calls ----

@@ -297,4 +297,9 @@
     <string name="cartouche_stats_loss">Pertes</string>
     <string name="cartouche_stats_close">Fermer les stats</string>
     <string name="cartouche_stats_open">Afficher les stats</string>
+    <string name="cartouche_loading_retry">Réessayer</string>
+    <string name="cartouche_loading_error_title">Cartouche ne répond pas</string>
+    <string name="cartouche_loading_error">Vérifie ta connexion : cartouche.gg n\'a pas répondu. Tes jeux sur le PC sont toujours là.</string>
+    <string name="cartouche_loading_slow_title">Ça prend du temps…</string>
+    <string name="cartouche_loading_slow">cartouche.gg met du temps à répondre. Patiente un peu, ou réessaie.</string>
 </resources>
