@@ -14,7 +14,6 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
-import android.util.Base64;
 import android.view.View;
 import android.view.WindowInsets;
 import android.widget.FrameLayout;
@@ -48,14 +47,18 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -78,6 +81,10 @@ import javax.microedition.khronos.opengles.GL10;
 public class CartoucheActivity extends Activity {
     static final String ORIGIN = "https://cartouche.gg";
     static final String HOME = ORIGIN + "/?shell=android";
+    // Covers reach the page as addresses under the site that this WebView answers itself, one
+    // image at a time: as data URLs in the answers, a PC's collection (hundreds of covers) ran
+    // the app out of memory.
+    static final String COVERS = "/__android/covers/";
 
     private WebView web;
     // Shown until the page is there; says so when the site does not answer (12 s: slow).
@@ -170,6 +177,16 @@ public class CartoucheActivity extends Activity {
                 } catch (ActivityNotFoundException ignored) {
                 }
                 return true;
+            }
+
+            @Override
+            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                Uri url = request.getUrl();
+                String path = url.getPath();
+                if (!ORIGIN.equals(url.getScheme() + "://" + url.getHost()) || path == null || !path.startsWith(COVERS)) {
+                    return null;
+                }
+                return coverResponse(path.substring(COVERS.length()));
             }
 
             @Override
@@ -414,48 +431,85 @@ public class CartoucheActivity extends Activity {
         return started;
     }
 
-    /** The PC's apps (Cartouche Stream publishes Ma collection there), each with its cover as a data URL. */
+    /** The PC's apps (Cartouche Stream publishes Ma collection there), each with its cover's address. */
     private JSONArray apps(String uuid) throws Exception {
         ComputerDetails details = computer(uuid);
-        NvHTTP http = connection(details);
-        List<NvApp> list = http.getAppList();
+        List<NvApp> list = connection(details).getAppList();
         JSONArray apps = new JSONArray();
         for (NvApp app : list) {
             JSONObject json = new JSONObject();
             json.put("id", app.getAppId());
             json.put("name", app.getAppName());
             json.put("hdr", app.isHdrSupported());
-            json.put("cover", cover(http, app, ConnectingScreen.coverFile(getCacheDir(), uuid, app.getAppId())));
+            json.put("cover", ORIGIN + COVERS + "app/" + uuid + "/" + app.getAppId());
             apps.put(json);
         }
         return apps;
     }
 
-    /** The cover as a data URL for the page, kept on disk for the connection screen too. */
-    private static Object cover(NvHTTP http, NvApp app, File keep) {
-        try (InputStream in = http.getBoxArt(app)) {
-            if (in == null) {
-                return JSONObject.NULL;
+    // ---- Covers, answered to the page's <img> one by one (COVERS) ----
+
+    // The app covers read from their PC since the app started; the others are read once, then
+    // shown from the phone's copy.
+    private final Set<String> coversRead = ConcurrentHashMap.newKeySet();
+
+    /** "app/<uuid>/<appId>": a stream server's box art; "pc/<file>": a cover pcCover kept. */
+    private WebResourceResponse coverResponse(String name) {
+        File file = null;
+        try {
+            String[] parts = name.split("/");
+            if (parts.length == 3 && parts[0].equals("app") && parts[1].matches("[0-9A-Za-z-]+") && parts[2].matches("[0-9]+")) {
+                file = appCover(parts[1], Integer.parseInt(parts[2]));
+            } else if (parts.length == 2 && parts[0].equals("pc") && parts[1].matches("[0-9A-Za-z-]+\\.png")) {
+                file = new File(new File(getCacheDir(), "pc-covers"), parts[1]);
             }
-            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-            byte[] buffer = new byte[16384];
-            int read;
-            while ((read = in.read(buffer)) != -1) {
-                bytes.write(buffer, 0, read);
+        } catch (Exception ignored) {
+            // No cover: the page shows the name.
+        }
+        try {
+            if (file != null && file.isFile()) {
+                Map<String, String> headers = new HashMap<>();
+                headers.put("Cache-Control", "no-cache");
+                return new WebResourceResponse(imageType(file), null, 200, "OK", headers, new FileInputStream(file));
             }
-            byte[] image = bytes.toByteArray();
-            try {
+        } catch (IOException ignored) {
+        }
+        return new WebResourceResponse("text/plain", null, 404, "Not Found", null, new ByteArrayInputStream(new byte[0]));
+    }
+
+    /** The box art, kept on disk for the connection screen too, read again from the PC once per run. */
+    private File appCover(String uuid, int appId) throws IOException {
+        File keep = ConnectingScreen.coverFile(getCacheDir(), uuid, appId);
+        String key = uuid + "-" + appId;
+        if (keep.isFile() && coversRead.contains(key)) {
+            return keep;
+        }
+        try (InputStream in = connection(computer(uuid)).getBoxArt(new NvApp("", appId, false))) {
+            if (in != null) {
+                byte[] image = readAll(in);
                 keep.getParentFile().mkdirs();
-                try (FileOutputStream out = new FileOutputStream(keep)) {
+                File part = new File(keep.getPath() + ".part");
+                try (FileOutputStream out = new FileOutputStream(part)) {
                     out.write(image);
                 }
-            } catch (IOException ignored) {
-                // The connection screen shows the cartridge instead.
+                if (!part.renameTo(keep)) {
+                    part.delete();
+                }
+                coversRead.add(key);
             }
-            String type = image.length > 3 && (image[0] & 0xFF) == 0xFF && (image[1] & 0xFF) == 0xD8 ? "image/jpeg" : "image/png";
-            return "data:" + type + ";base64," + Base64.encodeToString(image, Base64.NO_WRAP);
         } catch (IOException e) {
-            return JSONObject.NULL;
+            // The PC did not answer: its last cover, if the phone has one.
+            if (!keep.isFile()) {
+                throw e;
+            }
+        }
+        return keep;
+    }
+
+    private static String imageType(File file) throws IOException {
+        byte[] head = new byte[2];
+        try (InputStream in = new FileInputStream(file)) {
+            return in.read(head) == 2 && (head[0] & 0xFF) == 0xFF && (head[1] & 0xFF) == 0xD8 ? "image/jpeg" : "image/png";
         }
     }
 
@@ -493,35 +547,34 @@ public class CartoucheActivity extends Activity {
         }
     }
 
-    /** A game's cover from the PC, kept on disk under its fingerprint (a new cover, a new file). */
+    /** A game's cover from the PC, kept on disk under its fingerprint (a new cover, a new file); answers its address. */
     private String pcCover(String uuid, String gameId, String fingerprint) throws IOException {
         File dir = new File(getCacheDir(), "pc-covers");
-        File file = new File(dir, uuid + "-" + gameId + "-" + fingerprint.replaceAll("[^a-z0-9]", "") + ".png");
-        byte[] image;
-        if (file.exists()) {
-            image = readAll(file);
-        } else {
-            image = api(uuid).bytes("/v1/games/" + gameId + "/cover");
+        String name = uuid + "-" + gameId + "-" + fingerprint.replaceAll("[^a-z0-9]", "") + ".png";
+        File file = new File(dir, name);
+        if (!file.isFile()) {
+            byte[] image = api(uuid).bytes("/v1/games/" + gameId + "/cover");
             dir.mkdirs();
-            try (FileOutputStream out = new FileOutputStream(file)) {
+            File part = new File(dir, name + ".part");
+            try (FileOutputStream out = new FileOutputStream(part)) {
                 out.write(image);
-            } catch (IOException ignored) {
-                // Drawn again next time.
+            }
+            if (!part.renameTo(file)) {
+                part.delete();
+                throw new IOException("The cover could not be kept");
             }
         }
-        return "data:image/png;base64," + Base64.encodeToString(image, Base64.NO_WRAP);
+        return ORIGIN + COVERS + "pc/" + name;
     }
 
-    private static byte[] readAll(File file) throws IOException {
-        try (InputStream in = new java.io.FileInputStream(file)) {
-            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-            byte[] buffer = new byte[16384];
-            int read;
-            while ((read = in.read(buffer)) != -1) {
-                bytes.write(buffer, 0, read);
-            }
-            return bytes.toByteArray();
+    private static byte[] readAll(InputStream in) throws IOException {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        byte[] buffer = new byte[16384];
+        int read;
+        while ((read = in.read(buffer)) != -1) {
+            bytes.write(buffer, 0, read);
         }
+        return bytes.toByteArray();
     }
 
     /** Moonlight's own shortcut path: it handles an offline PC, another game running, and so on. */
