@@ -3,7 +3,9 @@ package com.limelight;
 import android.app.Activity;
 import android.app.Service;
 import android.content.ActivityNotFoundException;
+import android.content.ClipData;
 import android.content.ComponentName;
+import android.content.ContentValues;
 import android.content.Intent;
 import android.content.ServiceConnection;
 import android.graphics.Bitmap;
@@ -14,9 +16,12 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.provider.MediaStore;
 import android.view.View;
 import android.view.WindowInsets;
 import android.widget.FrameLayout;
+import android.webkit.ValueCallback;
+import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
@@ -54,6 +59,7 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -99,6 +105,10 @@ public class CartoucheActivity extends Activity {
     // The PCs polling has reported (the service only reports them one by one).
     private final Map<String, ComputerDetails> computers = new ConcurrentHashMap<>();
     private final ExecutorService work = Executors.newCachedThreadPool();
+    // The page's <input type="file"> (the Studio's photos and videos): the picker the WebView waits on.
+    private static final int PICK_FILES = 0xCA27;
+    private ValueCallback<Uri[]> picking;
+    private Uri photoTaken;
 
     private final ServiceConnection serviceConnection = new ServiceConnection() {
         @Override
@@ -219,6 +229,12 @@ public class CartoucheActivity extends Activity {
                 }
             }
         });
+        web.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params) {
+                return chooseFiles(callback, params);
+            }
+        });
         if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
             WebViewCompat.addWebMessageListener(web, "CartoucheAndroid", Collections.singleton(ORIGIN),
                     (view, message, sourceOrigin, isMainFrame, replyProxy) -> {
@@ -262,6 +278,110 @@ public class CartoucheActivity extends Activity {
         web.loadUrl(HOME);
     }
 
+    // ---- The page's file inputs ----
+
+    /**
+     * Android's own chooser for an <input type="file">: the gallery and the files (several at once
+     * when the input says multiple), and the camera for a new photo, saved in the phone's gallery
+     * (no permission needed from Android 10 on; before, the gallery only).
+     */
+    private boolean chooseFiles(ValueCallback<Uri[]> callback, WebChromeClient.FileChooserParams params) {
+        if (picking != null) {
+            picking.onReceiveValue(null);
+        }
+        forgetPhoto();
+        picking = callback;
+
+        ArrayList<String> types = new ArrayList<>();
+        for (String accept : params.getAcceptTypes()) {
+            for (String type : accept.split(",")) {
+                type = type.trim();
+                if (type.contains("/")) {
+                    types.add(type);
+                }
+            }
+        }
+        Intent files = new Intent(Intent.ACTION_GET_CONTENT);
+        files.addCategory(Intent.CATEGORY_OPENABLE);
+        files.setType(types.size() == 1 ? types.get(0) : "*/*");
+        if (types.size() > 1) {
+            files.putExtra(Intent.EXTRA_MIME_TYPES, types.toArray(new String[0]));
+        }
+        files.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, params.getMode() == WebChromeClient.FileChooserParams.MODE_OPEN_MULTIPLE);
+
+        boolean images = types.isEmpty();
+        for (String type : types) {
+            images |= type.startsWith("image/") || type.equals("*/*");
+        }
+        Intent chooser = Intent.createChooser(files, null);
+        if (images && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            try {
+                ContentValues values = new ContentValues();
+                values.put(MediaStore.Images.Media.DISPLAY_NAME, "Cartouche_" + System.currentTimeMillis() + ".jpg");
+                values.put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg");
+                values.put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Cartouche");
+                photoTaken = getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
+                if (photoTaken != null) {
+                    Intent camera = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+                    camera.putExtra(MediaStore.EXTRA_OUTPUT, photoTaken);
+                    camera.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    chooser.putExtra(Intent.EXTRA_INITIAL_INTENTS, new Intent[]{camera});
+                }
+            } catch (Exception e) {
+                forgetPhoto();
+            }
+        }
+        try {
+            startActivityForResult(chooser, PICK_FILES);
+            return true;
+        } catch (ActivityNotFoundException e) {
+            forgetPhoto();
+            picking = null;
+            return false;
+        }
+    }
+
+    /** The camera's empty photo, when it was not taken. */
+    private void forgetPhoto() {
+        if (photoTaken != null) {
+            try {
+                getContentResolver().delete(photoTaken, null, null);
+            } catch (Exception ignored) {
+            }
+            photoTaken = null;
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode != PICK_FILES) {
+            super.onActivityResult(requestCode, resultCode, data);
+            return;
+        }
+        ValueCallback<Uri[]> callback = picking;
+        picking = null;
+        Uri[] chosen = null;
+        if (resultCode == RESULT_OK) {
+            ClipData clip = data != null ? data.getClipData() : null;
+            if (clip != null && clip.getItemCount() > 0) {
+                chosen = new Uri[clip.getItemCount()];
+                for (int i = 0; i < chosen.length; i++) {
+                    chosen[i] = clip.getItemAt(i).getUri();
+                }
+            } else if (data != null && data.getData() != null) {
+                chosen = new Uri[]{data.getData()};
+            } else if (photoTaken != null) {
+                // The camera answers with nothing: its photo is where it was asked to write it.
+                chosen = new Uri[]{photoTaken};
+                photoTaken = null;
+            }
+        }
+        forgetPhoto();
+        if (callback != null) {
+            callback.onReceiveValue(chosen);
+        }
+    }
+
     /** The site did not answer: the page behind is the WebView's error, never shown. */
     private void fail() {
         pageFailed = true;
@@ -297,6 +417,8 @@ public class CartoucheActivity extends Activity {
             case "hello":
                 JSONObject hello = new JSONObject();
                 hello.put("version", BuildConfig.VERSION_NAME);
+                // What this app does beyond the first calls: the page's file inputs (0.1.17).
+                hello.put("features", new JSONArray().put("files"));
                 hello.put("computers", computersJson());
                 return hello;
             case "computers":
