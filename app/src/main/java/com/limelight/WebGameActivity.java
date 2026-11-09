@@ -154,9 +154,12 @@ public class WebGameActivity extends Activity {
             try {
                 if ("openExternal".equals(method)) {
                     Uri target = Uri.parse(args.getString(0));
-                    // Only the game's own sign-in, on its own address: nothing else leaves through here.
+                    // Only a sign-in on the page's own address leaves through here: the game's (Voltane's Google), or
+                    // Cartouche's for a game played on cartouche.gg (/connexion?request=…, collected by the page after).
                     String targetOrigin = target.getScheme() + "://" + target.getHost() + (target.getPort() != -1 ? ":" + target.getPort() : "");
-                    if (origin.equals(targetOrigin) && "/api/auth/google".equals(target.getPath())) {
+                    String path = target.getPath();
+                    boolean cartoucheSignIn = ("/connexion".equals(path) || "/en/connexion".equals(path)) && target.getQueryParameter("request") != null;
+                    if (origin.equals(targetOrigin) && ("/api/auth/google".equals(path) || cartoucheSignIn)) {
                         runOnUiThread(() -> {
                             try {
                                 startActivity(new Intent(Intent.ACTION_VIEW, target));
