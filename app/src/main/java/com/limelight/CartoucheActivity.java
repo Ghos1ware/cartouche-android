@@ -181,6 +181,24 @@ public class CartoucheActivity extends Activity {
                 if (ORIGIN.equals(url.getScheme() + "://" + url.getHost())) {
                     return false;
                 }
+                // Paying (Pro, Max, a recharge, the subscription's portal) stays in the app: Stripe's
+                // pages load here and their way back (cartouche.gg/offres?merci=…) lands in Cartouche,
+                // not in the phone's browser. The page's bridge stays limited to ORIGIN.
+                if (isStripe(url)) {
+                    return false;
+                }
+                // A bank's app asked by its 3-D Secure page (intent://…): open that app.
+                if ("intent".equals(url.getScheme())) {
+                    try {
+                        Intent intent = Intent.parseUri(url.toString(), Intent.URI_INTENT_SCHEME);
+                        intent.addCategory(Intent.CATEGORY_BROWSABLE);
+                        intent.setComponent(null);
+                        intent.setSelector(null);
+                        startActivity(intent);
+                    } catch (Exception ignored) {
+                    }
+                    return true;
+                }
                 // Anywhere else is the browser's: this WebView only ever shows Cartouche.
                 try {
                     startActivity(new Intent(Intent.ACTION_VIEW, url));
@@ -821,9 +839,21 @@ public class CartoucheActivity extends Activity {
         }
     }
 
+    /** Stripe's checkout and customer portal, and the pages they send to (3-D Secure, Link). */
+    static boolean isStripe(Uri url) {
+        String host = url.getHost();
+        return "https".equals(url.getScheme()) && host != null && (host.equals("stripe.com") || host.endsWith(".stripe.com") || host.endsWith(".stripe.network") || host.equals("link.com") || host.endsWith(".link.com"));
+    }
+
     @Override
     @SuppressWarnings("deprecation")
     public void onBackPressed() {
+        // On Stripe's page (paying in the app), back goes back to Cartouche.
+        String current = web != null ? web.getUrl() : null;
+        if (current != null && isStripe(Uri.parse(current)) && web.canGoBack()) {
+            web.goBack();
+            return;
+        }
         // Cartouche's "back" is Escape, as on the PC; the page closes what is open.
         if (web != null) {
             web.evaluateJavascript("window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'AndroidBack', bubbles: true }))", null);
