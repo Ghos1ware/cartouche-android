@@ -187,11 +187,6 @@ public class CartoucheActivity extends Activity {
                 if (isStripe(url)) {
                     return false;
                 }
-                // Linking GitHub to the account (« Envoyer sur GitHub »): GitHub's sign-in, its authorization
-                // and Cartouche Studio's install load here, and their way back (cartouche.gg) lands in Cartouche.
-                if (isGithubLink(url)) {
-                    return false;
-                }
                 // A bank's app asked by its 3-D Secure page (intent://…): open that app.
                 if ("intent".equals(url.getScheme())) {
                     try {
@@ -298,7 +293,30 @@ public class CartoucheActivity extends Activity {
         });
         getWindow().getDecorView().setBackgroundColor(0xFF07060D);
         setContentView(frame);
-        web.loadUrl(HOME);
+        String back = linkTarget(getIntent());
+        web.loadUrl(back != null ? back : HOME);
+    }
+
+    /**
+     * Back into Cartouche from the phone's browser (cartouche://open?to=/studio…): after linking GitHub there,
+     * its page offers « Retour à Cartouche ». Only a path of the site, opened as the app opens it.
+     */
+    static String linkTarget(Intent intent) {
+        Uri data = intent != null ? intent.getData() : null;
+        if (data == null || !"cartouche".equals(data.getScheme()) || !"open".equals(data.getHost())) return null;
+        String to = data.getQueryParameter("to");
+        if (to == null || !to.startsWith("/") || to.startsWith("//") || to.contains("\\") || to.length() > 400) return null;
+        Uri target = Uri.parse(ORIGIN + to);
+        if (!ORIGIN.equals(target.getScheme() + "://" + target.getHost())) return null;
+        return target.buildUpon().appendQueryParameter("shell", "android").build().toString();
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        String back = linkTarget(intent);
+        if (back != null && web != null) web.loadUrl(back);
     }
 
     // ---- The page's file inputs ----
@@ -845,14 +863,6 @@ public class CartoucheActivity extends Activity {
     }
 
     /** Stripe's checkout and customer portal, and the pages they send to (3-D Secure, Link). */
-    /** GitHub's pages of linking an account: sign-in, two-factor, the authorization, the App's install. */
-    static boolean isGithubLink(Uri url) {
-        String path = url.getPath();
-        if (!"https".equals(url.getScheme()) || !"github.com".equals(url.getHost()) || path == null) return false;
-        return path.equals("/login") || path.startsWith("/login/") || path.equals("/session") || path.startsWith("/sessions/")
-                || path.startsWith("/apps/cartouche-studio") || path.startsWith("/installations/") || path.startsWith("/settings/installations");
-    }
-
     static boolean isStripe(Uri url) {
         String host = url.getHost();
         return "https".equals(url.getScheme()) && host != null && (host.equals("stripe.com") || host.endsWith(".stripe.com") || host.endsWith(".stripe.network") || host.equals("link.com") || host.endsWith(".link.com"));
@@ -863,7 +873,7 @@ public class CartoucheActivity extends Activity {
     public void onBackPressed() {
         // On Stripe's page (paying in the app), back goes back to Cartouche.
         String current = web != null ? web.getUrl() : null;
-        if (current != null && (isStripe(Uri.parse(current)) || isGithubLink(Uri.parse(current))) && web.canGoBack()) {
+        if (current != null && isStripe(Uri.parse(current)) && web.canGoBack()) {
             web.goBack();
             return;
         }

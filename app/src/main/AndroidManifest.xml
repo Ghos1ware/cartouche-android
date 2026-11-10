@@ -90,6 +90,7 @@
         <activity
             android:name=".CartoucheActivity"
             android:exported="true"
+            android:launchMode="singleTask"
             android:resizeableActivity="true"
             android:theme="@android:style/Theme.Material.NoActionBar"
             android:configChanges="mcc|mnc|touchscreen|keyboard|keyboardHidden|navigation|screenLayout|fontScale|uiMode|orientation|screenSize|smallestScreenSize|layoutDirection">
@@ -100,6 +101,13 @@
                 <category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
                 <category android:name="tv.ouya.intent.category.APP" />
+            </intent-filter>
+            <!-- Back into Cartouche from the phone's browser (cartouche://open?to=/…), after linking GitHub there. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="cartouche" android:host="open" />
             </intent-filter>
         </activity>
 
