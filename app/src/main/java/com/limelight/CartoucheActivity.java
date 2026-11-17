@@ -21,6 +21,7 @@ import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
 import android.provider.MediaStore;
+import android.view.KeyEvent;
 import android.view.View;
 import android.view.WindowInsets;
 import android.widget.FrameLayout;
@@ -880,6 +881,37 @@ public class CartoucheActivity extends Activity {
     static boolean isStripe(Uri url) {
         String host = url.getHost();
         return "https".equals(url.getScheme()) && host != null && (host.equals("stripe.com") || host.endsWith(".stripe.com") || host.endsWith(".stripe.network") || host.equals("link.com") || host.endsWith(".link.com"));
+    }
+
+    /**
+     * A TV remote's keys the WebView keeps from the page (Menu) or may (the media keys): handed to the page as
+     * the keys a browser names them, which input.ts maps (REMOTE_KEYS). On a TV only: a phone's media keys stay
+     * the system's.
+     */
+    private static final Map<Integer, String> REMOTE_KEYS = new HashMap<>();
+    static {
+        REMOTE_KEYS.put(KeyEvent.KEYCODE_MENU, "ContextMenu");
+        REMOTE_KEYS.put(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, "MediaPlayPause");
+        REMOTE_KEYS.put(KeyEvent.KEYCODE_MEDIA_PLAY, "MediaPlayPause");
+        REMOTE_KEYS.put(KeyEvent.KEYCODE_MEDIA_PAUSE, "MediaPlayPause");
+        REMOTE_KEYS.put(KeyEvent.KEYCODE_MEDIA_REWIND, "MediaRewind");
+        REMOTE_KEYS.put(KeyEvent.KEYCODE_MEDIA_PREVIOUS, "MediaTrackPrevious");
+        REMOTE_KEYS.put(KeyEvent.KEYCODE_CHANNEL_DOWN, "ChannelDown");
+        REMOTE_KEYS.put(KeyEvent.KEYCODE_MEDIA_FAST_FORWARD, "MediaFastForward");
+        REMOTE_KEYS.put(KeyEvent.KEYCODE_MEDIA_NEXT, "MediaTrackNext");
+        REMOTE_KEYS.put(KeyEvent.KEYCODE_CHANNEL_UP, "ChannelUp");
+    }
+
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        String key = web != null && isTv(this) ? REMOTE_KEYS.get(event.getKeyCode()) : null;
+        if (key == null) {
+            return super.dispatchKeyEvent(event);
+        }
+        if (event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0) {
+            web.evaluateJavascript("window.dispatchEvent(new KeyboardEvent('keydown', { key: '" + key + "', code: 'AndroidRemote', bubbles: true }))", null);
+        }
+        return true;
     }
 
     @Override
