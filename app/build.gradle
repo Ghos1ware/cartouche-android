@@ -12,8 +12,8 @@ android {
         targetSdk 36
 
         // Cartouche's own numbering (based on Moonlight 12.2).
-        versionName "0.1.20"
-        versionCode = 21
+        versionName "0.1.21"
+        versionCode = 22
 
         // Generate native debug symbols to allow Google Play to symbolicate our native crashes
         ndk.debugSymbolLevel = 'FULL'

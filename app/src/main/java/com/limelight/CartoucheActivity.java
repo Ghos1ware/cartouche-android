@@ -2,12 +2,16 @@ package com.limelight;
 
 import android.app.Activity;
 import android.app.Service;
+import android.app.UiModeManager;
 import android.content.ActivityNotFoundException;
 import android.content.ClipData;
 import android.content.ComponentName;
 import android.content.ContentValues;
+import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
+import android.content.pm.PackageManager;
+import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.net.Uri;
 import android.opengl.GLSurfaceView;
@@ -173,7 +177,8 @@ public class CartoucheActivity extends Activity {
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
         settings.setMediaPlaybackRequiresUserGesture(false);
-        settings.setUserAgentString(settings.getUserAgentString() + " CartoucheAndroid/" + BuildConfig.VERSION_NAME);
+        // On a TV the page takes a TV's look, driven by the remote or a controller (android.ts androidTv).
+        settings.setUserAgentString(settings.getUserAgentString() + " CartoucheAndroid/" + BuildConfig.VERSION_NAME + (isTv(this) ? " CartoucheTV" : ""));
         web.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
@@ -230,6 +235,8 @@ public class CartoucheActivity extends Activity {
                 clock.removeCallbacks(slow);
                 if (!pageFailed) {
                     loading.done();
+                    // A TV's remote speaks to the focused view: the page's, not the loading screen's button.
+                    web.requestFocus();
                 }
             }
 
@@ -860,6 +867,13 @@ public class CartoucheActivity extends Activity {
         if (web != null) {
             web.onPause();
         }
+    }
+
+    /** A TV (Android TV, Google TV, a Shield): its UI mode says so, or its launcher. */
+    static boolean isTv(Context context) {
+        UiModeManager modes = (UiModeManager) context.getSystemService(Context.UI_MODE_SERVICE);
+        return (modes != null && modes.getCurrentModeType() == Configuration.UI_MODE_TYPE_TELEVISION)
+                || context.getPackageManager().hasSystemFeature(PackageManager.FEATURE_LEANBACK);
     }
 
     /** Stripe's checkout and customer portal, and the pages they send to (3-D Secure, Link). */
